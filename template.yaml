@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://cubeship.dev/schema/template/v1.json
+version: 1
+# The first release that keeps a volume's data across deploys.
+minCubeship: "0.7.0"
+project: gitlab
+
+inputs:
+  - key: domain
+    type: domain
+    label: Where GitLab answers
+    help: It becomes external_url. Changing it later means changing GITLAB_OMNIBUS_CONFIG on the app.
+  - key: rootPassword
+    type: secret
+    label: The password for the root account
+    help: Read once, on the first start, while GitLab creates root. Keep a copy.
+    generate: 32
+
+databases:
+  - key: db
+    name: gitlab-db
+    # GitLab 19 runs on PostgreSQL 17 and only 17: it is both the minimum and
+    # the maximum upstream supports.
+    engine: postgres
+    version: "17"
+    # GitLab's own name for it, and what its documentation assumes.
+    database: gitlabhq_production
+    limits: { cpu: 1, memory: 1Gi }
+  - key: cache
+    name: gitlab-redis
+    # Sessions and the background queues. 7.0 is the minimum, 7.2 the
+    # recommendation.
+    engine: redis
+    version: "7.4"
+
+apps:
+  - key: web
+    name: gitlab
+    image: gitlab/gitlab-ce
+    tag: "19.3.2-ce.0"
+    # nginx inside the image, with TLS left to Traefik.
+    port: 80
+    # Public, no token, and the only health endpoint that is: /-/readiness and
+    # /-/liveness answer 404 to anyone not on the monitoring allowlist.
+    health: /-/health
+    domains:
+      - host: ${input.domain}
+    volumes:
+      # gitlab.rb and gitlab-secrets.json, which holds the keys every encrypted
+      # column in the database is readable with. Lose it and lose them.
+      - path: /etc/gitlab
+      # Repositories, LFS objects, uploads, artifacts, the package registry.
+      - path: /var/opt/gitlab
+      # Kept across deploys because it is where a failed reconfigure explains
+      # itself; logrotate inside the image bounds it.
+      - path: /var/log/gitlab
+    limits: { cpu: 4, memory: 4Gi }
+    env:
+      # One long Ruby string written into gitlab.rb on every start, so it always
+      # wins over the file in the volume. The settings below the connection
+      # details are upstream's memory-constrained set, which is what makes this
+      # fit on one VPS.
+      GITLAB_OMNIBUS_CONFIG: >-
+        external_url 'https://${input.domain}';
+        nginx['listen_port'] = 80;
+        nginx['listen_https'] = false;
+        nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' };
+        letsencrypt['enable'] = false;
+        registry['enable'] = false;
+        postgresql['enable'] = false;
+        gitlab_rails['db_adapter'] = 'postgresql';
+        gitlab_rails['db_encoding'] = 'unicode';
+        gitlab_rails['db_host'] = '${db.db.host}';
+        gitlab_rails['db_port'] = '${db.db.port}'.to_i;
+        gitlab_rails['db_database'] = '${db.db.name}';
+        gitlab_rails['db_username'] = '${db.db.user}';
+        gitlab_rails['db_password'] = '${db.db.password}';
+        redis['enable'] = false;
+        gitlab_rails['redis_host'] = '${db.cache.host}';
+        gitlab_rails['redis_port'] = '${db.cache.port}'.to_i;
+        gitlab_rails['redis_password'] = '${db.cache.password}';
+        gitlab_rails['initial_root_password'] = '${input.rootPassword}';
+        gitlab_rails['display_initial_root_password'] = false;
+        puma['worker_processes'] = 0;
+        sidekiq['concurrency'] = 10;
+        prometheus_monitoring['enable'] = false;
+        gitlab_kas['enable'] = false;
+        gitlab_rails['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000' };
+        gitaly['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000', 'GITALY_COMMAND_SPAWN_MAX_PARALLEL' => '2' };
+        gitaly['configuration'] = { concurrency: [ { 'rpc' => '/gitaly.SmartHTTPService/PostReceivePack', 'max_per_repo' => 3 }, { 'rpc' => '/gitaly.SSHService/SSHUploadPack', 'max_per_repo' => 3 } ] };

@@ -1,0 +1,22 @@
+# Every merge to main updates a release PR; merging that PR tags the
+# commit and publishes the GitHub release the Cubeship catalog reads.
+# Commit messages decide the version: fix: is a patch, feat: a minor,
+# feat!: or a BREAKING CHANGE footer a major.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
