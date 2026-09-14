@@ -36,9 +36,13 @@ apps:
     tag: "19.3.2-ce.0"
     # nginx inside the image, with TLS left to Traefik.
     port: 80
-    # Public, no token, and the only health endpoint that is: /-/readiness and
-    # /-/liveness answer 404 to anyone not on the monitoring allowlist.
-    health: /-/health
+    # A page Rails renders for anyone signed out, so it proves Rails is up.
+    # Not /-/health: like /-/readiness and /-/liveness it answers 404 to any
+    # address off the monitoring allowlist, which is localhost, so the proxy's
+    # probe never passes and the domain stays down. Widening the allowlist to
+    # the proxy's network would open them to every visitor too, since GitLab
+    # sees each request arrive from the proxy.
+    health: /users/sign_in
     domains:
       - host: ${input.domain}
     volumes:

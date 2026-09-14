@@ -67,11 +67,14 @@ finished long before. Watch it get there:
 cubeship app logs gitlab/production/gitlab --follow
 ```
 
-It is up when `/-/health` answers:
+It is up when the sign-in page answers `200`:
 
 ```bash
-curl -sS https://<your domain>/-/health
+curl -s -o /dev/null -w '%{http_code}\n' https://<your domain>/users/sign_in
 ```
+
+`/-/health` is no use for this from outside: GitLab answers it only to
+localhost and returns `404` to everyone else, even once it is running.
 
 Then sign in as `root` with the password above.
 
