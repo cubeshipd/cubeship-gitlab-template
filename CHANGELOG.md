@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.1.1...v1.2.0) (2026-09-14)
+
+
+### Features
+
+* publish Git over SSH on a port of its own ([029f4b8](https://github.com/cubeshipd/cubeship-gitlab-template/commit/029f4b8f5118efdfd669e70568614b3214a8b855))
+
 ## [1.1.1](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.1.0...v1.1.1) (2026-09-14)
 
 
