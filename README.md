@@ -30,7 +30,7 @@ a hundred.
 - **gitlab-redis** — a managed Redis 7.4, holding sessions and the background
   queues. The Redis inside the image is turned off.
 
-It needs Cubeship 0.7.0 or newer.
+It needs Cubeship 0.7.2 or newer.
 
 ## What you are asked
 
@@ -38,6 +38,7 @@ It needs Cubeship 0.7.0 or newer.
 | --- | --- |
 | Where GitLab answers | A domain you control, pointed at your instance. It becomes `external_url`, which GitLab writes into every clone URL, webhook and email. |
 | The password for the root account | Nothing — the instance generates it and shows it once. **Keep a copy**; it is read only on the first start, while GitLab creates `root`. |
+| The port Git over SSH answers on | `2222` by default, from `1024` to `65535`. Not `22`, which is the server's own SSH. |
 
 ## Why the database is not a managed one
 
@@ -92,17 +93,25 @@ docker exec -it $(docker ps -qf name=cubeship-gitlab-production-gitlab) \
   gitlab-rake "gitlab:password:reset[root]"
 ```
 
-## Git over HTTPS only
+## Git over SSH and HTTPS
 
-Clone, pull and push over `https://<your domain>/<group>/<project>.git`. **Git
-over SSH does not work**: it needs TCP port 22 reachable from outside, and
-Cubeship exposes a domain's HTTP and nothing else. GitLab still offers SSH
-clone URLs it cannot serve, so turn them off: **Admin → Settings → General →
-Visibility and access controls → Enabled Git access protocols → Only HTTP(S)**.
+Both work. Over SSH, add your key under **Settings → SSH keys** and clone
+with the URL GitLab shows, which carries the port:
 
-Push with your password, or with a personal access token made under
-**Settings → Access tokens** — required once two-factor sign-in is on. Git LFS
-works over the same URL.
+```bash
+git clone ssh://git@<your domain>:2222/<group>/<project>.git
+```
+
+SSH is published on the port you answered — `2222` unless you chose
+another — because `22` is the server's own SSH. If your provider has a
+firewall in front of the machine, open that port there as well; Cubeship
+opens it in the server's own firewall. Nothing proxies it: it is GitLab's
+sshd, directly.
+
+Over HTTPS, clone `https://<your domain>/<group>/<project>.git` and push
+with your password or a personal access token from
+**Settings → Access tokens** — required once two-factor sign-in is on. Git
+LFS works over the same URL.
 
 ## What is turned off, and why
 

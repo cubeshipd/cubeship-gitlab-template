@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://cubeship.dev/schema/template/v1.json
 version: 1
-# The first release that keeps a volume's data across deploys.
-minCubeship: "0.7.0"
+# The first release that publishes an app's TCP ports.
+minCubeship: "0.7.2"
 project: gitlab
 
 inputs:
@@ -14,6 +14,13 @@ inputs:
     label: The password for the root account
     help: Read once, on the first start, while GitLab creates root. Keep a copy.
     generate: 32
+  - key: sshPort
+    type: number
+    label: The port Git over SSH answers on
+    help: 22 is the server's own SSH, so Git gets another. Open it in your provider's firewall too.
+    default: 2222
+    min: 1024
+    max: 65535
 
 # The database is the one inside the image, and it has to be. GitLab loads its
 # schema with `psql --single-transaction`, which takes a lock per partition and
@@ -45,6 +52,11 @@ apps:
     health: /users/sign_in
     domains:
       - host: ${input.domain}
+    # sshd inside the image, on the instance's address. GitLab writes this
+    # port into every SSH clone URL it shows.
+    tcp:
+      - port: 22
+        host: ${input.sshPort}
     volumes:
       # gitlab.rb and gitlab-secrets.json, which holds the keys every encrypted
       # column in the database is readable with. Lose it and lose them.
@@ -67,6 +79,7 @@ apps:
       GITLAB_OMNIBUS_CONFIG: >-
         external_url 'https://${input.domain}';
         gitlab_rails['nginx'] = { 'listen_port' => 80, 'listen_https' => false, 'proxy_set_headers' => { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' } };
+        gitlab_rails['gitlab_shell_ssh_port'] = ${input.sshPort};
         letsencrypt['enable'] = false;
         registry['enable'] = false;
         postgresql['shared_buffers'] = '256MB';
