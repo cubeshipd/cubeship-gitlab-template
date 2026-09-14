@@ -4,10 +4,10 @@
 platform: Git repositories, merge requests, issues, wikis, a package registry
 and CI/CD pipelines, in one Linux package.
 
-This template installs it on a Cubeship instance, with the managed Postgres and
-Redis it needs and volumes for the repositories and its configuration. The
-bundled Postgres and Redis inside the image are turned off, so the database is
-one Cubeship backs up and can be restored on its own.
+This template installs it on a Cubeship instance, with a managed Redis and
+volumes for the repositories, the database and its configuration. The Postgres
+is the one inside the image, and it has to be — see [Why the database is not a
+managed one](#why-the-database-is-not-a-managed-one).
 
 **GitLab is the heaviest thing you can put on an instance.** Upstream's baseline
 for a single machine is 8 vCPU and 16 GB of memory; this template ships
@@ -24,13 +24,11 @@ a hundred.
   - `/etc/gitlab` — `gitlab.rb` and `gitlab-secrets.json`, the keys every
     encrypted column in the database is readable with.
   - `/var/opt/gitlab` — every repository, LFS object, upload, artifact and
-    package.
+    package, **and the Postgres database**.
   - `/var/log/gitlab` — the logs, kept because they are where a failed start
     explains itself. `logrotate` inside the image bounds them.
-- **gitlab-db** — a managed Postgres 17 database, `gitlabhq_production`. GitLab
-  19 runs on 17 and only 17: upstream's minimum and maximum are the same.
 - **gitlab-redis** — a managed Redis 7.4, holding sessions and the background
-  queues.
+  queues. The Redis inside the image is turned off.
 
 It needs Cubeship 0.7.0 or newer.
 
@@ -40,6 +38,23 @@ It needs Cubeship 0.7.0 or newer.
 | --- | --- |
 | Where GitLab answers | A domain you control, pointed at your instance. It becomes `external_url`, which GitLab writes into every clone URL, webhook and email. |
 | The password for the root account | Nothing — the instance generates it and shows it once. **Keep a copy**; it is read only on the first start, while GitLab creates `root`. |
+
+## Why the database is not a managed one
+
+GitLab loads its schema with `psql --single-transaction`, which takes a lock per
+partitioned table and needs `max_locks_per_transaction` far above Postgres's
+default of `64`. Omnibus sets `128` for its own. A managed Postgres on Cubeship
+runs the official image's defaults and takes no server parameters, so the very
+first migration ends in:
+
+```
+ERROR:  out of shared memory
+HINT:  You might need to increase "max_locks_per_transaction".
+```
+
+and no reconfigure ever finishes. Nothing in the template can raise it, so the
+bundled Postgres runs instead, with its data in the `/var/opt/gitlab` volume.
+That is also why `gitlab-backup` below, and not a Cubeship database dump.
 
 ## The first start takes about ten minutes
 
@@ -137,25 +152,38 @@ too — GitLab does not learn it from the request.
 
 ## Resources
 
-The app is limited to 4 CPU and 4 GiB, the database to 1 CPU and 1 GiB. If the
-machine has more to spare, give Puma its workers back and GitLab gets several
+The app is limited to 4 CPU and 4 GiB — everything but Redis is inside it. If
+the machine has more to spare, give Puma its workers back and GitLab gets several
 requests at a time: set `puma['worker_processes'] = 2` and raise the app's
 memory to 6 GiB or more. If the container is killed and restarted under load,
 that is the memory limit, not a crash.
 
+`shared_buffers` and `effective_cache_size` are spelled out in
+`GITLAB_OMNIBUS_CONFIG` because omnibus sizes Postgres from what it reads as the
+machine's memory, and inside a container that is the *host's*. A
+32 GB host would otherwise hand a 4 GiB container 8 GB of shared buffers, and
+Postgres would not start.
+
 ## Backups
 
-Two halves, and both are needed: the managed Postgres, which Cubeship dumps on
-a schedule you set, and the volumes, which hold the repositories and
-`gitlab-secrets.json`. A database restored without that file leaves every
-encrypted value — two-factor secrets, CI variables, tokens — unreadable. Copy
-the volumes from the machine the app runs on.
+Cubeship cannot dump this database: it is inside the app. Use GitLab's own
+backup, from the machine the app runs on:
+
+```bash
+docker exec -t $(docker ps -qf name=cubeship-gitlab-production-gitlab) \
+  gitlab-backup create
+```
+
+It writes a tar into `/var/opt/gitlab/backups`. **It does not include
+`/etc/gitlab`**, and a backup restored without `gitlab-secrets.json` leaves
+every encrypted value — two-factor secrets, CI variables, tokens — unreadable.
+Copy that file too, and keep both off the machine.
 
 ## Upgrading
 
 Change `tag` and redeploy, but **GitLab has required stops**: skipping one
 leaves migrations that cannot run. Check upstream's [upgrade
 path](https://docs.gitlab.com/update/upgrade_paths/) for the versions between
-the one installed and the one wanted, and take them in order. A major upgrade
-can also change the PostgreSQL version it requires, which is a new database,
-not a new tag.
+the one installed and the one wanted, and take them in order. The Postgres in
+the volume is upgraded by the image itself, which is one fewer thing to line up
+than an external one would be.

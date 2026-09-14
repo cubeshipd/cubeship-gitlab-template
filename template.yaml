@@ -15,16 +15,13 @@ inputs:
     help: Read once, on the first start, while GitLab creates root. Keep a copy.
     generate: 32
 
+# The database is the one inside the image, and it has to be. GitLab loads its
+# schema with `psql --single-transaction`, which takes a lock per partition and
+# needs max_locks_per_transaction well above Postgres's default of 64 —
+# omnibus sets 128 for its own. A managed Postgres here runs the image's
+# defaults and takes no server parameters, so the load ends in `out of shared
+# memory` every time. Its data is in /var/opt/gitlab with the repositories.
 databases:
-  - key: db
-    name: gitlab-db
-    # GitLab 19 runs on PostgreSQL 17 and only 17: it is both the minimum and
-    # the maximum upstream supports.
-    engine: postgres
-    version: "17"
-    # GitLab's own name for it, and what its documentation assumes.
-    database: gitlabhq_production
-    limits: { cpu: 1, memory: 1Gi }
   - key: cache
     name: gitlab-redis
     # Sessions and the background queues. 7.0 is the minimum, 7.2 the
@@ -56,24 +53,20 @@ apps:
     limits: { cpu: 4, memory: 4Gi }
     env:
       # One long Ruby string written into gitlab.rb on every start, so it always
-      # wins over the file in the volume. The settings below the connection
-      # details are upstream's memory-constrained set, which is what makes this
-      # fit on one VPS.
+      # wins over the file in the volume. Most of it is upstream's
+      # memory-constrained set, which is what makes this fit on one VPS.
+      #
+      # shared_buffers and effective_cache_size are spelled out because omnibus
+      # sizes them from what it reads as the machine's memory, and inside a
+      # container that is the host's — a 32 GB host would hand a 4 GiB
+      # container 8 GB of shared buffers and Postgres would not start.
       GITLAB_OMNIBUS_CONFIG: >-
         external_url 'https://${input.domain}';
-        nginx['listen_port'] = 80;
-        nginx['listen_https'] = false;
-        nginx['proxy_set_headers'] = { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' };
+        gitlab_rails['nginx'] = { 'listen_port' => 80, 'listen_https' => false, 'proxy_set_headers' => { 'X-Forwarded-Proto' => 'https', 'X-Forwarded-Ssl' => 'on' } };
         letsencrypt['enable'] = false;
         registry['enable'] = false;
-        postgresql['enable'] = false;
-        gitlab_rails['db_adapter'] = 'postgresql';
-        gitlab_rails['db_encoding'] = 'unicode';
-        gitlab_rails['db_host'] = '${db.db.host}';
-        gitlab_rails['db_port'] = '${db.db.port}'.to_i;
-        gitlab_rails['db_database'] = '${db.db.name}';
-        gitlab_rails['db_username'] = '${db.db.user}';
-        gitlab_rails['db_password'] = '${db.db.password}';
+        postgresql['shared_buffers'] = '256MB';
+        postgresql['effective_cache_size'] = '1GB';
         redis['enable'] = false;
         gitlab_rails['redis_host'] = '${db.cache.host}';
         gitlab_rails['redis_port'] = '${db.cache.port}'.to_i;
