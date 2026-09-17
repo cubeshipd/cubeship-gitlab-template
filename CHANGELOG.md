@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.2.0...v1.2.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* cut a release when the upstream app updates ([75309b8](https://github.com/cubeshipd/cubeship-gitlab-template/commit/75309b8251ea958c0eb3eaf2f226c6895fd749cd))
+
 ## [1.2.0](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.1.1...v1.2.0) (2026-09-14)
 
 
