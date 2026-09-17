@@ -199,3 +199,15 @@ path](https://docs.gitlab.com/update/upgrade_paths/) for the versions between
 the one installed and the one wanted, and take them in order. The Postgres in
 the volume is upgraded by the image itself, which is one fewer thing to line up
 than an external one would be.
+
+---
+
+<!-- cubeship-crosslink -->
+
+## About Cubeship
+
+This is a template for [**Cubeship**](https://github.com/cubeshipd/cubeship) —
+a PaaS you run on your own server: `docker push`, and it is live, with HTTPS,
+a database beside it, and a second machine when one stops being enough.
+
+Browse every template at [cubeship.dev/templates](https://cubeship.dev/templates).
