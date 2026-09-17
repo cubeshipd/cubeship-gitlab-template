@@ -4,7 +4,7 @@
   "timezone": "America/Sao_Paulo",
   "labels": ["dependencies", "upstream"],
   "prConcurrentLimit": 3,
-  "commitMessagePrefix": "chore:",
+  "semanticCommitScope": null,
   "customManagers": [
     {
       "description": "Cubeship template.yaml: image + tag pairs under apps/",
@@ -19,9 +19,16 @@
   ],
   "packageRules": [
     {
-      "description": "Upstream app releases: one PR per image, never grouped.",
+      "description": "An upstream release changes what the template deploys, so it has to cut a new template version. 'chore' is invisible to release-please and would strand the update on main.",
       "matchDatasources": ["docker"],
+      "semanticCommitType": "feat",
       "separateMinorPatch": true
+    },
+    {
+      "description": "An upstream patch is a fix, not a feature: same shape, corrected behaviour.",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch"],
+      "semanticCommitType": "fix"
     },
     {
       "description": "Majors are migrations, not tag changes — flag them loudly.",
@@ -29,6 +36,11 @@
       "matchUpdateTypes": ["major"],
       "labels": ["dependencies", "upstream", "major-review"],
       "addLabels": ["breaking"]
+    },
+    {
+      "description": "CI tooling does not change what users deploy, so it stays out of the changelog and cuts no release.",
+      "matchManagers": ["github-actions"],
+      "semanticCommitType": "chore"
     }
   ]
 }
