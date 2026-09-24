@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.2.1...v1.2.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* update gitlab/gitlab-ce docker tag to v19.4.1 ([#9](https://github.com/cubeshipd/cubeship-gitlab-template/issues/9)) ([c495440](https://github.com/cubeshipd/cubeship-gitlab-template/commit/c49544035c7ae5028d3561557ac7fa29274842a6))
+
 ## [1.2.1](https://github.com/cubeshipd/cubeship-gitlab-template/compare/v1.2.0...v1.2.1) (2026-09-17)
 
 
